@@ -1,46 +1,72 @@
-# intern-attendance
+# intern-attendance (Laravel & TypeScript Version)
 
-Googleカレンダーの予定を自動で取得し、その日の出勤予定者をSlackへ通知する管理ツールです。
+Googleカレンダーの予定を自動取得し、その日の出勤予定者をSlackへ通知する管理ツールです。
+GAS版から移行し、データベースによる多角的な管理とセキュリティ強化を実現しています。
+
+---
 
 ## 📝 概要
-インターン生の出勤・退勤予定をGoogleカレンダーから抽出し、指定したSlackチャンネルへ自動投稿します。
-データベースを構築せず、Googleカレンダーを「情報の真実（Single Source of Truth）」として活用することで、運用・保守コストを最小限に抑えています。
+インターン生の出勤予定をGoogleカレンダーから抽出し、Slackへ自動投稿します。
+カレンダーIDをデータベースで管理することで、将来的な複数チームへの対応や、詳細なユーザー認可（ドメイン制限）を可能にしています。
 
 ## 🚀 ユーザーフロー
-1. **予定入力**: インターン生が共通のGoogleカレンダーに出勤予定を入力。
-2. **データ抽出**: GAS（Google Apps Script）が定期実行され、当日のイベントを取得。
-3. **Slack通知**: 整形された出勤予定者リストがSlackチャンネルへ投稿。
+1. **認証**: 管理者（`@ing`ドメイン保持者）がGoogle OAuthでログイン。
+2. **設定**: 管理画面から「カレンダーID」をDBに登録・更新。
+3. **データ抽出**: Laravelのスケジュール機能（Cron）がバックグラウンドで動作し、API経由でイベントを取得。
+4. **Slack通知**: 整形されたリストが指定チャンネルへ自動投稿。
 
 ## 🛠️ 技術選定
 | カテゴリ | 選定技術 | 選定理由 |
 | :--- | :--- | :--- |
-| **Runtime** | Google Apps Script (GAS) | Googleサービスとの親和性が高く、サーバーレス（無料）で運用可能。 |
-| **Trigger** | GAS Time-driven Triggers | 毎朝の定期実行をノーコードで設定でき、メンテナンスが容易。 |
-| **Notification** | Slack Incoming Webhook | シンプルな設定でリッチなメッセージ投稿が可能。 |
+| **Backend** | Laravel (PHP) | 認証・DB操作・API連携を迅速に開発でき、長期保守に適しているため。 |
+| **Frontend** | React / TypeScript | 管理画面の型安全性を担保し、リッチなUIを提供するため。 |
+| **Database** | MySQL | カレンダーID、通知設定、および将来的な勤怠ログの保存。 |
+| **Auth** | Laravel Socialite | `@ing` ドメインに限定したGoogleログインを容易に実装するため。 |
+
+---
+
+## 🧪 実装前の重要確認事項 (PoC)
+開発に着手する前に、**Postman** を使用して以下の疎通確認を必ず行います。
+
+### 1. カレンダーIDによる取得検証
+カレンダーIDだけで取得可能か、アクセストークンが必要かを以下の手順で確認します。
+* **Endpoint**: `GET https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events`
+* **Auth**: Postmanの `Auth` タブから `OAuth 2.0` を設定。
+* **検証ポイント**: 
+    * 非公開カレンダーの場合、アクセストークンが必須であることを確認。
+    * `401 Unauthorized` が出る場合、トークン取得フロー（Client ID/Secret）の不備を確認。
+    * `403 Forbidden` の場合、対象カレンダーの共有設定に「閲覧権限」があるか確認。
+
+### 2. アクセストークンの要件
+* 定期実行（バックグラウンド）を行うため、**アクセストークン**の保持と、期限切れ時に自動更新するための **リフレッシュトークン** の保存が必要であることを確認します。
+
+---
 
 ## 🏗️ システム構成
-1. **Google Calendar API**: 共有カレンダーから当日のイベントデータを取得。
-2. **GAS Logic**: 取得したイベントから「氏名」「開始時間」「終了時間」を抽出・パース。
-3. **Incoming Webhook**: 定型文に整形し、Slack API経由で通知を実行。
+1. **Google Calendar API**: 予定データの取得。
+2. **Laravel Backend**: 
+    - **Schedule/Command**: 定期実行ロジック。
+    - **Database**: `calendars` テーブル（`calendar_id` を保持）。
+    - **Security Middleware**: `@ing` ドメイン以外のアクセスを遮断。
+3. **Slack API**: Incoming Webhookによる通知実行。
+
+---
 
 ## ⚙️ セットアップ（導入手順）
 
-### 1. Googleカレンダーの準備
-- 勤怠管理用の「共有カレンダー」を作成します。
-- カレンダー設定から **カレンダーID**（`xxx@group.calendar.google.com`）をコピーしておきます。
+### 1. Google Cloud プロジェクトの準備
+- Google Calendar API を有効化。
+- **OAuth 2.0 クライアントID** を作成（`@ing` ドメインからのログインを許可設定）。
+- 取得した `CLIENT_ID`, `CLIENT_SECRET` を `.env` に設定。
 
-### 2. Slack Webhookの作成
-- Slack Appを作成し、`Incoming Webhooks` を有効化します。
-- 通知先のチャンネルを選択し、発行された **Webhook URL** をコピーします。
-
-### 3. GASの実装
-- [Google Apps Script](https://script.google.com/) で新しいプロジェクトを作成します。
-- `main.gs` にコードを貼り付け、上記で取得した「カレンダーID」と「Webhook URL」をスクリプトプロパティ（または定数）に設定します。
-
-### 4. トリガーの設定
-- GASエディタ左側の時計アイコン（トリガー）をクリック。
-- `notifyDailyAttendance` 関数を「時間主導型」で、毎朝任意の時間（例：午前8時〜9時）に実行されるよう設定します。
-
-## 💡 工夫・拡張のアイデア
-- **名前の紐付け**: カレンダーのタイトルからSlackのメンバーIDを逆引きしてメンションを送る。
-- **欠席・リモート対応**: 「欠席」「リモート」などのキーワードが含まれる場合にラベルを付けて表示。
+### 2. データベースの準備
+- カレンダー情報を管理するテーブルを作成します。
+```sql
+CREATE TABLE calendars (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255),
+    calendar_id VARCHAR(255) NOT NULL, -- xxx@group.calendar.google.com
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
