@@ -35,8 +35,4 @@ return [
         ],
     ],
 
-    'attendance' => [
-        'summary_slack_webhook_url' => env('ATTENDANCE_SUMMARY_SLACK_WEBHOOK_URL'),
-    ],
-
 ];
