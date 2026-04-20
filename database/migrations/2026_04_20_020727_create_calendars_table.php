@@ -13,6 +13,10 @@ return new class extends Migration
     {
         Schema::create('calendars', function (Blueprint $table) {
             $table->id();
+            $table->string('user_name');
+            $table->string('calendar_id');
+            $table->text('slack_webhook_url');
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }
