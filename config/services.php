@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'attendance' => [
+        'summary_slack_webhook_url' => env('ATTENDANCE_SUMMARY_SLACK_WEBHOOK_URL'),
+        'notify_daily_at' => env('ATTENDANCE_NOTIFY_DAILY_AT', '09:00'),
+    ],
+
 ];
