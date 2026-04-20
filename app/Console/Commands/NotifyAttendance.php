@@ -12,11 +12,9 @@ class NotifyAttendance extends Command
 {
     protected $signature = 'app:notify-attendance';
 
-    protected $description = '登録者全員の稼働状況を一覧にしてSlackへ通知します';
-
     public function handle(GoogleApiService $service): int
     {
-        $calendars = Calendar::where('is_active', true)->orderBy('team_name')->get();
+        $calendars = Calendar::where('is_active', true)->orderBy('user_name')->get();
         if ($calendars->isEmpty()) {
             $this->info('有効な通知対象がありません。');
 
@@ -35,16 +33,15 @@ class NotifyAttendance extends Command
                     continue;
                 }
                 if (empty($calendar->slack_webhook_url)) {
-                    $this->warn("{$calendar->team_name}: slack_webhook_url が未設定のためスキップしました。");
                     continue;
                 }
                 $statusText = $attendance['status'];
                 if ($attendance['status'] === '出社' && ! empty($attendance['work_time'])) {
                     $statusText = "出社（{$attendance['work_time']}の勤務）";
                 }
-                $linesByWebhook[$calendar->slack_webhook_url][] = "• {$calendar->team_name}：{$statusText}";
+                $linesByWebhook[$calendar->slack_webhook_url][] = "• {$calendar->user_name}：{$statusText}";
             } catch (Throwable $e) {
-                $this->error("{$calendar->team_name}: {$e->getMessage()}");
+                $this->error("{$calendar->user_name}: {$e->getMessage()}");
             }
         }
 
