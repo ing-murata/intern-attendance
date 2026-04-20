@@ -24,41 +24,40 @@ class NotifyAttendance extends Command
         $weekdays = ['日', '月', '火', '水', '木', '金', '土'];
         $today = now()->timezone('Asia/Tokyo');
         $dateLine = $today->format('Y年n月j日').'('.$weekdays[$today->dayOfWeek].')';
+        $webhookUrl = config('services.slack.webhook_url');
+        if (empty($webhookUrl)) {
+            $this->error('SLACK_WEBHOOK_URL が設定されていません。');
 
-        $linesByWebhook = [];
+            return self::SUCCESS;
+        }
+
+        $lines = [];
         foreach ($calendars as $calendar) {
             try {
                 $attendance = $service->getAttendance($calendar->calendar_id);
                 if ($attendance['status'] === null) {
                     continue;
                 }
-                if (empty($calendar->slack_webhook_url)) {
-                    continue;
-                }
                 $statusText = $attendance['status'];
                 if ($attendance['status'] === '出社' && ! empty($attendance['work_time'])) {
                     $statusText = "出社（{$attendance['work_time']}の勤務）";
                 }
-                $linesByWebhook[$calendar->slack_webhook_url][] = "• {$calendar->user_name}：{$statusText}";
+                $lines[] = "• {$calendar->user_name}：{$statusText}";
             } catch (Throwable $e) {
                 $this->error("{$calendar->user_name}: {$e->getMessage()}");
             }
         }
 
-        if ($linesByWebhook === []) {
+        if ($lines === []) {
             $this->info('送信対象の稼働状況がありませんでした。');
-
-            return self::SUCCESS;
-        }
-
-        foreach ($linesByWebhook as $webhookUrl => $lines) {
+        } else {
             $body = "【稼働状況一覧】{$dateLine}\n\n".implode("\n", $lines);
             Http::post($webhookUrl, [
                 'text' => $body,
             ]);
-        }
 
-        $this->info('一覧を送信しました。');
+            $this->info('一覧を送信しました。');
+        }
 
         return self::SUCCESS;
     }

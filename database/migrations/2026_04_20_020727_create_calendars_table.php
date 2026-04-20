@@ -15,7 +15,6 @@ return new class extends Migration
             $table->id();
             $table->string('user_name');
             $table->string('calendar_id');
-            $table->text('slack_webhook_url');
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
