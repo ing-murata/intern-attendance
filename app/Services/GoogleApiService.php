@@ -22,15 +22,17 @@ class GoogleApiService
     /**
      * @return array{status: ?string, work_time: ?string}
      */
-    public function getAttendance($calendarId): array
+    public function getAttendance($calendarId, string $role): array
     {
+        $eventTypes = $role === '社員' ? ['outOfOffice'] : ['workingLocation'];
+
         $service = new Calendar($this->client);
         $now = now();
         $optParams = [
             'timeMin' => $now->startOfDay()->toRfc3339String(),
             'timeMax' => $now->endOfDay()->toRfc3339String(),
             'singleEvents' => true,
-            'eventTypes' => ['workingLocation', 'outOfOffice'],
+            'eventTypes' => $eventTypes,
         ];
 
         $events = $service->events->listEvents($calendarId, $optParams);

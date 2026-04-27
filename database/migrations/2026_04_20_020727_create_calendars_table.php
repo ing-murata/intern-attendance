@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('user_name');
             $table->string('calendar_id');
+            $table->enum('role', ['社員', 'インターン']);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
