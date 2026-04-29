@@ -18,8 +18,8 @@ class CalendarFactory extends Factory
     public function definition(): array
     {
         return [
-            'user_name' => env('CALENDAR_USER_NAME', fake()->name()),
-            'calendar_id' => env('CALENDAR_ID', fake()->unique()->safeEmail()),
+            'user_name' => env('CALENDAR_USER_NAME', $this->faker->name()),
+            'calendar_id' => env('CALENDAR_ID', $this->faker->unique()->safeEmail()),
             'role' => env('CALENDAR_ROLE', 'インターン'),
             'is_active' => filter_var(env('CALENDAR_IS_ACTIVE', true), FILTER_VALIDATE_BOOL),
         ];
