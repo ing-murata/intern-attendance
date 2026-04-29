@@ -73,11 +73,9 @@ class NotifyAttendance extends Command
             return self::SUCCESS;
         }
 
-        $body = $this->buildSlackMessage($dateLine, $groups);
+        $payload = $this->buildSlackPayload($dateLine, $groups);
 
-        $response = Http::post($webhookUrl, [
-            'text' => $body,
-        ]);
+        $response = Http::post($webhookUrl, $payload);
 
         $this->line('  <fg=gray>────────────────────────────────────</>');
         if ($response->successful()) {
@@ -109,29 +107,24 @@ class NotifyAttendance extends Command
      *
      * @param  array<string, array<int, array{name: string, status_text: string}>>  $groups
      */
-    private function buildSlackMessage(string $dateLine, array $groups): string
+    private function buildSlackPayload(string $dateLine, array $groups): array
     {
-        $lines = [];
-        $lines[] = "*稼働状況一覧*　_{$dateLine}_";
+        $textLines = ["【稼働状況一覧】　{$dateLine}"];
 
-        $sections = [
-            '社員' => '*社員*',
-            'インターン' => '*インターン*',
-        ];
-
-        foreach ($sections as $role => $heading) {
-            $members = $groups[$role];
+        foreach ($groups as $role => $members) {
             if ($members === []) {
                 continue;
             }
 
-            $lines[] = '';
-            $lines[] = $heading;
+            $textLines[] = '';
+            $textLines[] = $role;
             foreach ($members as $member) {
-                $lines[] = "・{$member['name']}：{$member['status_text']}";
+                $textLines[] = "・{$member['name']}：{$member['status_text']}";
             }
         }
 
-        return implode("\n", $lines);
+        return [
+            'text' => implode("\n", $textLines),
+        ];
     }
 }
