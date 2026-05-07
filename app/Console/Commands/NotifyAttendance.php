@@ -95,8 +95,8 @@ class NotifyAttendance extends Command
      */
     private function formatStatus(array $attendance): string
     {
-        if ($attendance['status'] === '出社' && ! empty($attendance['work_time'])) {
-            return "出社（{$attendance['work_time']}）";
+        if (! empty($attendance['work_time'])) {
+            return "{$attendance['status']}（{$attendance['work_time']}）";
         }
 
         return $attendance['status'];

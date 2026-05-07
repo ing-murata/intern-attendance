@@ -41,7 +41,26 @@ class GoogleApiService
         $workTime = null;
         foreach ($events->getItems() as $event) {
             if ($event->eventType === 'workingLocation') {
-                $status = '出社';
+                $props = $event->getWorkingLocationProperties();
+                if ($props) {
+                    $locationType = $props->getType();
+                    switch ($locationType) {
+                        case 'homeOffice':
+                            $status = 'リモート(自宅)';
+                            break;
+                        case 'officeLocation':
+                            $status = '出社';
+                            break;
+                        case 'customLocation':
+                            $label = $props->getCustomLocation() ? $props->getCustomLocation()->getLabel() : '出社';
+                            $status = $label;
+                            break;
+                        default:
+                            $status = '出社';
+                    }
+                } else {
+                    $status = '出社';
+                }
                 $workTime = $this->formatWorkingHours($event);
             }
 
