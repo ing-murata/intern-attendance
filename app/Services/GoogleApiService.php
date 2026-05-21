@@ -11,6 +11,11 @@ class GoogleApiService
 {
     protected $client;
 
+    public function getCalendarService(): Calendar
+    {
+        return new Calendar($this->client);
+    }
+
     public function __construct()
     {
         $this->client = new Client;
