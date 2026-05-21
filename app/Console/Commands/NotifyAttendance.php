@@ -96,7 +96,7 @@ class NotifyAttendance extends Command
     private function formatStatus(array $attendance): string
     {
         if (! empty($attendance['work_time'])) {
-            return "{$attendance['status']}（{$attendance['work_time']}）";
+            return "{$attendance['work_time']} {$attendance['status']}";
         }
 
         return $attendance['status'];
@@ -109,18 +109,24 @@ class NotifyAttendance extends Command
      */
     private function buildSlackPayload(string $dateLine, array $groups): array
     {
-        $textLines = ["【稼働状況一覧】　{$dateLine}"];
+        $textLines = [$dateLine];
 
-        foreach ($groups as $role => $members) {
+        // 指定した順序で表示する
+        $order = ['インターン', '社員'];
+
+        foreach ($order as $role) {
+            $members = $groups[$role] ?? [];
             if ($members === []) {
                 continue;
             }
 
             $textLines[] = '';
             $textLines[] = $role;
+            $textLines[] = '```';
             foreach ($members as $member) {
-                $textLines[] = "・{$member['name']}：{$member['status_text']}";
+                $textLines[] = "{$member['name']} {$member['status_text']}";
             }
+            $textLines[] = '```';
         }
 
         return [

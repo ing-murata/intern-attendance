@@ -24,49 +24,31 @@ class GoogleApiService
      */
     public function getAttendance($calendarId, string $role): array
     {
-        $eventTypes = $role === '社員' ? ['outOfOffice'] : ['workingLocation'];
-
         $service = new Calendar($this->client);
         $now = now();
         $optParams = [
             'timeMin' => $now->startOfDay()->toRfc3339String(),
             'timeMax' => $now->endOfDay()->toRfc3339String(),
             'singleEvents' => true,
-            'eventTypes' => $eventTypes,
+            'eventTypes' => ['default', 'outOfOffice', 'workingLocation'],
         ];
 
         $events = $service->events->listEvents($calendarId, $optParams);
 
         $status = null;
         $workTime = null;
-        foreach ($events->getItems() as $event) {
-            if ($event->eventType === 'workingLocation') {
-                $props = $event->getWorkingLocationProperties();
-                if ($props) {
-                    $locationType = $props->getType();
-                    switch ($locationType) {
-                        case 'homeOffice':
-                            $status = 'リモート(自宅)';
-                            break;
-                        case 'officeLocation':
-                            $status = '出社';
-                            break;
-                        case 'customLocation':
-                            $label = $props->getCustomLocation() ? $props->getCustomLocation()->getLabel() : '出社';
-                            $status = $label;
-                            break;
-                        default:
-                            $status = '出社';
-                    }
-                } else {
-                    $status = '出社';
-                }
-                $workTime = $this->formatWorkingHours($event);
-            }
 
+        foreach ($events->getItems() as $event) {
+            // 不在予定がある場合、ステータスを予定名に上書き
             if ($event->eventType === 'outOfOffice') {
-                $status = '不在/休暇';
-                $workTime = null;
+                $status = $event->getSummary() ?: '不在';
+                $workTime = $this->formatWorkingHours($event, '-');
+            } 
+            // 勤務地イベントがある場合（インターンのみ）
+            elseif ($event->eventType === 'workingLocation' && $role === 'インターン') {
+                $props = $event->getWorkingLocationProperties();
+                $status = ($props && $props->getType() === 'homeOffice') ? 'リモート' : '出社';
+                $workTime = $this->formatWorkingHours($event, ' ~ ');
             }
         }
 
@@ -76,7 +58,7 @@ class GoogleApiService
         ];
     }
 
-    private function formatWorkingHours(Event $event): ?string
+    private function formatWorkingHours(Event $event, string $separator = ' ~ '): ?string
     {
         $start = $event->getStart();
         $end = $event->getEnd();
@@ -93,6 +75,6 @@ class GoogleApiService
         $startAt = Carbon::parse($startStr)->timezone('Asia/Tokyo');
         $endAt = Carbon::parse($endStr)->timezone('Asia/Tokyo');
 
-        return $startAt->format('H:i').'〜'.$endAt->format('H:i');
+        return $startAt->format('G:i').$separator.$endAt->format('G:i');
     }
 }
