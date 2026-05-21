@@ -76,3 +76,19 @@ git pull origin main
 | DB構成を変更した場合 | `php artisan migrate` |
 | ライブラリを追加・更新した場合 | `composer install` |
 | JS/CSSをビルドし直す場合 | `npm run build` |
+
+### 4) データを変更する場合
+envでカレンダーに登録する個人情報を管理している。
+
+```bash
+# envファイルの値を修正する。
+vim .env(iを押して修正、:wqで終了)
+
+# マイグレーションの実行
+php artisan migrate:fresh --seed
+
+# 変更の確認
+php artisan tinker
+\App\Models\Calendar::all();
+```
+
