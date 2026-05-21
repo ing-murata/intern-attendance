@@ -109,28 +109,16 @@ class NotifyAttendance extends Command
      */
     private function buildSlackPayload(string $dateLine, array $groups): array
     {
-        $textLines = [$dateLine];
-
-        // 指定した順序で表示する
         $order = ['インターン', '社員'];
 
-        foreach ($order as $role) {
-            $members = $groups[$role] ?? [];
-            if ($members === []) {
-                continue;
-            }
-
-            $textLines[] = '';
-            $textLines[] = $role;
-            $textLines[] = '```';
-            foreach ($members as $member) {
-                $textLines[] = "{$member['name']} {$member['status_text']}";
-            }
-            $textLines[] = '```';
-        }
+        $text = view('slack.attendance', [
+            'dateLine' => $dateLine,
+            'groups'   => $groups,
+            'order'    => $order,
+        ])->render();
 
         return [
-            'text' => implode("\n", $textLines),
+            'text' => trim($text),
         ];
     }
 }
