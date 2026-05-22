@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Calendar;
 use App\Services\GoogleApiService;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Throwable;
@@ -20,105 +21,66 @@ class NotifyAttendance extends Command
             ->get();
 
         $webhookUrl = config('services.slack.webhook_url');
-        if ($calendars->isEmpty() || empty($webhookUrl)) {
-            if ($calendars->isEmpty()) {
-                $this->warn('有効な通知対象がありません。');
-            } else {
-                $this->error('SLACK_WEBHOOK_URL が設定されていません。');
-            }
 
-            return self::SUCCESS;
-        }
-
-        $weekdays = ['日', '月', '火', '水', '木', '金', '土'];
         $today = now()->timezone('Asia/Tokyo');
-        $dateLine = $today->format('Y年n月j日').'('.$weekdays[$today->dayOfWeek].')';
 
-        $this->line('');
-        $this->line("  <fg=cyan;options=bold>稼働状況チェック</> <fg=gray>({$dateLine})</>");
-        $this->line('  <fg=gray>────────────────────────────────────</>');
-
-        $groups = [
-            '社員' => [],
-            'インターン' => [],
-        ];
+        $members = [];
+        $startOfDay = $today->copy()->startOfDay();
+        $endOfDay = $today->copy()->endOfDay();
 
         foreach ($calendars as $calendar) {
             try {
-                $attendance = $service->getAttendance($calendar->calendar_id, $calendar->role);
-                if ($attendance['status'] === null) {
-                    $this->line("  <fg=gray>- {$calendar->user_name}（{$calendar->role}）: 予定なし</>");
+                $events = $service->getEvents($calendar->calendar_id, $startOfDay, $endOfDay);
+                $status = null;
+                $workTime = null;
 
+                foreach ($events->getItems() as $event) {
+                    if ($event->eventType === 'outOfOffice') {
+                        $status = $event->getSummary() ?: '不在';
+                        break; // 不在を最優先
+                    }
+
+                    if ($event->eventType === 'workingLocation' && $calendar->role === 'インターン') {
+                        $type = $event->getWorkingLocationProperties()?->getType();
+                        $status = ($type === 'homeOffice') ? 'リモート' : '出社';
+
+                        $start = $event->getStart()?->getDateTime();
+                        $end = $event->getEnd()?->getDateTime();
+                        if ($start && $end) {
+                            $startDt = Carbon::parse($start)->timezone('Asia/Tokyo');
+                            $endDt = Carbon::parse($end)->timezone('Asia/Tokyo');
+                            $workTime = $startDt->format('H:i') . '-' . $endDt->format('H:i');
+                        }
+                    }
+                }
+
+                if ($status === null) {
+                    $this->line("  <fg=gray>- {$calendar->user_name}（{$calendar->role}）: データなし（スキップ）</>");
                     continue;
                 }
 
-                $statusText = $this->formatStatus($attendance);
-                $groups[$calendar->role][] = [
+                $members[] = [
                     'name' => $calendar->user_name,
-                    'status_text' => $statusText,
+                    'role' => $calendar->role,
+                    'attendance' => [
+                        'status' => $status,
+                        'work_time' => $workTime,
+                    ],
                 ];
 
-                $this->line("  <fg=green>[OK]</> {$calendar->user_name}（{$calendar->role}）: {$statusText}");
+                $this->line("  <fg=green>[OK]</> {$calendar->user_name}（{$calendar->role}）: " . ($workTime ? "{$workTime} " : "") . $status);
             } catch (Throwable $e) {
                 $this->line("  <fg=red>[NG]</> {$calendar->user_name}（{$calendar->role}）: {$e->getMessage()}");
             }
         }
 
-        $totalCount = array_sum(array_map('count', $groups));
-        if ($totalCount === 0) {
-            $this->line('');
-            $this->info('  送信対象の稼働状況はありませんでした。');
-            $this->line('');
-
-            return self::SUCCESS;
-        }
-
-        $payload = $this->buildSlackPayload($dateLine, $groups);
-
-        $response = Http::post($webhookUrl, $payload);
-
-        $this->line('  <fg=gray>────────────────────────────────────</>');
-        if ($response->successful()) {
-            $this->line("  <fg=green;options=bold>Slackへ通知しました</> <fg=gray>(対象: {$totalCount}件)</>");
-        } else {
-            $this->line("  <fg=red;options=bold>Slack通知に失敗しました</> <fg=gray>(HTTP {$response->status()})</>");
-        }
-        $this->line('');
+        Http::post($webhookUrl, [
+            'text' => view('slack.attendance', [
+                'today' => $today,
+                'members' => $members,
+            ])->render()
+        ]);
 
         return self::SUCCESS;
-    }
-
-    /**
-     * 1人分のステータス表記を整形する。
-     *
-     * @param  array{status: ?string, work_time: ?string}  $attendance
-     */
-    private function formatStatus(array $attendance): string
-    {
-        if (! empty($attendance['work_time'])) {
-            return "{$attendance['work_time']} {$attendance['status']}";
-        }
-
-        return $attendance['status'];
-    }
-
-    /**
-     * Slack通知用の本文を組み立てる。
-     *
-     * @param  array<string, array<int, array{name: string, status_text: string}>>  $groups
-     */
-    private function buildSlackPayload(string $dateLine, array $groups): array
-    {
-        $order = ['インターン', '社員'];
-
-        $text = view('slack.attendance', [
-            'dateLine' => $dateLine,
-            'groups'   => $groups,
-            'order'    => $order,
-        ])->render();
-
-        return [
-            'text' => trim($text),
-        ];
     }
 }
