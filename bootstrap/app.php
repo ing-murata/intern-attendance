@@ -18,8 +18,6 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withSchedule(function (Schedule $schedule): void {
-        $schedule->command('app:notify-attendance')
-            ->dailyAt('09:30')
-            ->timezone('Asia/Tokyo');
+        $schedule->command('app:notify-attendance')->dailyAt('09:30');
     })
     ->create();
