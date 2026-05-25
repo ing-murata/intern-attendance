@@ -25,8 +25,8 @@ class NotifyWeeklyReport extends Command
             return self::SUCCESS;
         }
 
-        $start = Carbon::now()->addWeek()->startOfWeek();
-        $end = Carbon::now()->addWeek()->endOfWeek();
+        $start = Carbon::now()->next(Carbon::SATURDAY)->startOfDay();
+        $end = $start->copy()->addDays(6)->endOfDay();
 
         $members = [];
         foreach ($calendars as $calendar) {
